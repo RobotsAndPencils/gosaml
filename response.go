@@ -64,11 +64,11 @@ func IsValid(x *Response, appSettings *AppSettings, accountSettings *AccountSett
 	}
 
 	if x.Assertion.Subject.SubjectConfirmation.Method != "urn:oasis:names:tc:SAML:2.0:cm:bearer" {
-		return errors.New("asserition method exception")
+		return errors.New("assertion method exception")
 	}
 
 	if x.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != appSettings.AssertionConsumerServiceURL {
-		return errors.New("subject recipient miss match, expected: " + appSettings.AssertionConsumerServiceURL + " not " + x.Destination)
+		return errors.New("subject recipient mismatch, expected: " + appSettings.AssertionConsumerServiceURL + " not " + x.Destination)
 	}
 
 	//CHECK TIMES
