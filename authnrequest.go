@@ -18,13 +18,10 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"net/url"
-	"os"
-	"os/exec"
-	"strings"
-	"time"
 
+	"github.com/RobotsAndPencils/gosaml/structs"
+	"github.com/RobotsAndPencils/gosaml/xmlsec"
 	"github.com/nu7hatch/gouuid"
 )
 
@@ -33,58 +30,17 @@ func NewAuthorizationRequest(appSettings AppSettings, accountSettings AccountSet
 	if err != nil {
 		fmt.Println("Error is UUID Generation:", err)
 	}
-	//yyyy-MM-dd'T'H:mm:ss
-	//layout := "2006-01-02T15:04:05"
-	//layout := "2014-12-04T21:13:49Z"
-	//t := time.Now().Format(layout)
-	t := time.Now().UTC().Format(time.RFC3339Nano)
 
-	return &AuthorizationRequest{AccountSettings: accountSettings, AppSettings: appSettings, Id: "_" + myIdUUID.String(), IssueInstant: t}
+	return &AuthorizationRequest{AccountSettings: accountSettings, AppSettings: appSettings, Id: "_" + myIdUUID.String()}
 }
 
 // GetRequest returns a string formatted XML document that represents the SAML document
 // TODO: parameterize more parts of the request
 func (ar AuthorizationRequest) GetRequest(base64Encode bool) (string, error) {
-	d := AuthnRequest{
-		XMLName: xml.Name{
-			Local: "samlp:AuthnRequest",
-		},
-		SAMLP:                       "urn:oasis:names:tc:SAML:2.0:protocol",
-		SAML:                        "urn:oasis:names:tc:SAML:2.0:assertion",
-		ID:                          ar.Id,
-		ProtocolBinding:             "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-		Version:                     "2.0",
-		AssertionConsumerServiceURL: ar.AppSettings.AssertionConsumerServiceURL,
-		Issuer: Issuer{
-			XMLName: xml.Name{
-				Local: "saml:Issuer",
-			},
-			Url:  ar.AppSettings.Issuer,
-			SAML: "urn:oasis:names:tc:SAML:2.0:assertion",
-		},
-		IssueInstant: ar.IssueInstant,
-		NameIDPolicy: NameIDPolicy{
-			XMLName: xml.Name{
-				Local: "samlp:NameIDPolicy",
-			},
-			AllowCreate: true,
-			Format:      "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
-		},
-		RequestedAuthnContext: RequestedAuthnContext{
-			XMLName: xml.Name{
-				Local: "samlp:RequestedAuthnContext",
-			},
-			SAMLP:      "urn:oasis:names:tc:SAML:2.0:protocol",
-			Comparison: "exact",
-			AuthnContextClassRef: AuthnContextClassRef{
-				XMLName: xml.Name{
-					Local: "saml:AuthnContextClassRef",
-				},
-				SAML:      "urn:oasis:names:tc:SAML:2.0:assertion",
-				Transport: "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
-			},
-		},
-	}
+	d := structs.NewAuthnRequest()
+	d.ID = ar.Id
+	d.AssertionConsumerServiceURL = ar.AppSettings.AssertionConsumerServiceURL
+	d.Issuer.Url = ar.AppSettings.AssertionConsumerServiceURL
 	b, err := xml.MarshalIndent(d, "", "    ")
 	if err != nil {
 		return "", err
@@ -102,160 +58,26 @@ func (ar AuthorizationRequest) GetRequest(base64Encode bool) (string, error) {
 
 // GetSignedRequest returns a string formatted XML document that represents the SAML document
 // TODO: parameterize more parts of the request
-func (ar AuthorizationRequest) GetSignedRequest(base64Encode bool, publicCert string, privateCert string) (string, error) {
+func (ar AuthorizationRequest) GetSignedRequest(base64Encode bool, publicCert string, privateKey string) (string, error) {
 	cert, err := LoadCertificate(publicCert)
 	if err != nil {
 		return "", err
 	}
 
-	d := AuthnSignedRequest{
-		XMLName: xml.Name{
-			Local: "samlp:AuthnRequest",
-		},
-		SAMLP:                       "urn:oasis:names:tc:SAML:2.0:protocol",
-		SAML:                        "urn:oasis:names:tc:SAML:2.0:assertion",
-		SAMLSIG:                     "http://www.w3.org/2000/09/xmldsig#",
-		ID:                          ar.Id,
-		ProtocolBinding:             "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-		Version:                     "2.0",
-		AssertionConsumerServiceURL: ar.AppSettings.AssertionConsumerServiceURL,
-		Issuer: Issuer{
-			XMLName: xml.Name{
-				Local: "saml:Issuer",
-			},
-			Url: ar.AppSettings.AssertionConsumerServiceURL,
-		},
-		IssueInstant: ar.IssueInstant,
-		NameIDPolicy: NameIDPolicy{
-			XMLName: xml.Name{
-				Local: "samlp:NameIDPolicy",
-			},
-			AllowCreate: true,
-			Format:      "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
-		},
-		RequestedAuthnContext: RequestedAuthnContext{
-			XMLName: xml.Name{
-				Local: "samlp:RequestedAuthnContext",
-			},
-			SAMLP:      "urn:oasis:names:tc:SAML:2.0:protocol",
-			Comparison: "exact",
-			AuthnContextClassRef: AuthnContextClassRef{
-				XMLName: xml.Name{
-					Local: "saml:AuthnContextClassRef",
-				},
-				SAML:      "urn:oasis:names:tc:SAML:2.0:assertion",
-				Transport: "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
-			},
-		},
+	d := structs.NewAuthnSignedRequest()
+	d.ID = ar.Id
+	d.AssertionConsumerServiceURL = ar.AppSettings.AssertionConsumerServiceURL
+	d.Issuer.Url = ar.AppSettings.AssertionConsumerServiceURL
+	d.Signature.SignedInfo.SamlsigReference.URI = "#" + ar.Id
+	d.Signature.KeyInfo.X509Data.X509Certificate.Cert = cert
 
-		Signature: Signature{
-			XMLName: xml.Name{
-				Local: "samlsig:Signature",
-			},
-			Id: "Signature1",
-			SignedInfo: SignedInfo{
-				XMLName: xml.Name{
-					Local: "samlsig:SignedInfo",
-				},
-				CanonicalizationMethod: CanonicalizationMethod{
-					XMLName: xml.Name{
-						Local: "samlsig:CanonicalizationMethod",
-					},
-					Algorithm: "http://www.w3.org/2001/10/xml-exc-c14n#",
-				},
-				SignatureMethod: SignatureMethod{
-					XMLName: xml.Name{
-						Local: "samlsig:SignatureMethod",
-					},
-					Algorithm: "http://www.w3.org/2000/09/xmldsig#rsa-sha1",
-				},
-				SamlsigReference: SamlsigReference{
-					XMLName: xml.Name{
-						Local: "samlsig:Reference",
-					},
-					URI: "#" + ar.Id,
-					Transforms: Transforms{
-						XMLName: xml.Name{
-							Local: "samlsig:Transforms",
-						},
-						Transform: Transform{
-							XMLName: xml.Name{
-								Local: "samlsig:Transform",
-							},
-							Algorithm: "http://www.w3.org/2000/09/xmldsig#enveloped-signature",
-						},
-					},
-					DigestMethod: DigestMethod{
-						XMLName: xml.Name{
-							Local: "samlsig:DigestMethod",
-						},
-						Algorithm: "http://www.w3.org/2000/09/xmldsig#sha1",
-					},
-					DigestValue: DigestValue{
-						XMLName: xml.Name{
-							Local: "samlsig:DigestValue",
-						},
-					},
-				},
-			},
-			SignatureValue: SignatureValue{
-				XMLName: xml.Name{
-					Local: "samlsig:SignatureValue",
-				},
-			},
-			KeyInfo: KeyInfo{
-				XMLName: xml.Name{
-					Local: "samlsig:KeyInfo",
-				},
-				X509Data: X509Data{
-					XMLName: xml.Name{
-						Local: "samlsig:X509Data",
-					},
-					X509Certificate: X509Certificate{
-						XMLName: xml.Name{
-							Local: "samlsig:X509Certificate",
-						},
-						Cert: cert,
-					},
-				},
-			},
-		},
-	}
 	b, err := xml.MarshalIndent(d, "", "    ")
 	if err != nil {
 		return "", err
 	}
 
 	samlAuthnRequest := string(b)
-	// Write the SAML to a file.
-
-	samlXmlsecInput, err := ioutil.TempFile(os.TempDir(), "tmpgs")
-	if err != nil {
-		return "", err
-	}
-	samlXmlsecOutput, err := ioutil.TempFile(os.TempDir(), "tmpgs")
-	if err != nil {
-		return "", err
-	}
-
-	samlXmlsecOutput.Close()
-
-	samlXmlsecInput.WriteString("<?xml version='1.0' encoding='UTF-8'?>\n")
-	samlXmlsecInput.WriteString(samlAuthnRequest)
-	samlXmlsecInput.Close()
-
-	_, errOut := exec.Command("xmlsec1", "--sign", "--privkey-pem", privateCert,
-		"--id-attr:ID", "urn:oasis:names:tc:SAML:2.0:protocol:AuthnRequest",
-		"--output", samlXmlsecOutput.Name(), samlXmlsecInput.Name()).Output()
-	if errOut != nil {
-		return "", errOut
-	}
-
-	samlSignedRequest, err := ioutil.ReadFile(samlXmlsecOutput.Name())
-	if err != nil {
-		return "", err
-	}
-	samlSignedRequestXml := strings.Trim(string(samlSignedRequest), "\n")
+	samlSignedRequestXml, err := xmlsec.SignRequest(samlAuthnRequest, privateKey)
 
 	if base64Encode {
 		data := []byte(samlSignedRequestXml)

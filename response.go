@@ -5,10 +5,13 @@ import (
 	"encoding/xml"
 	"errors"
 	"time"
+
+	"github.com/RobotsAndPencils/gosaml/structs"
+	"github.com/RobotsAndPencils/gosaml/xmlsec"
 )
 
 func Parse(resp string, appSettings *AppSettings, accountSettings *AccountSettings) (map[string]string, error) {
-	x := Response{}
+	x := structs.Response{}
 	rtn := make(map[string]string)
 	decode, err := base64.StdEncoding.DecodeString(resp)
 	if err != nil {
@@ -20,7 +23,7 @@ func Parse(resp string, appSettings *AppSettings, accountSettings *AccountSettin
 		return rtn, err
 	}
 
-	err = VerifySignature(string(decode), accountSettings.Certificate)
+	err = xmlsec.VerifyResponseSignature(string(decode), accountSettings.Certificate)
 	if err != nil {
 		return rtn, err
 	}
@@ -31,10 +34,10 @@ func Parse(resp string, appSettings *AppSettings, accountSettings *AccountSettin
 	}
 
 	for _, attr := range x.Assertion.AttributeStatement.Attributes {
-		rtn[attr.Name] = attr.Value
+		rtn[attr.Name] = attr.AttributeValue.Value
 
 		if attr.FriendlyName != "" {
-			rtn[attr.FriendlyName] = attr.Value
+			rtn[attr.FriendlyName] = attr.AttributeValue.Value
 		}
 	}
 
@@ -42,21 +45,21 @@ func Parse(resp string, appSettings *AppSettings, accountSettings *AccountSettin
 
 }
 
-func IsValid(x *Response, appSettings *AppSettings, accountSettings *AccountSettings) error {
+func IsValid(x *structs.Response, appSettings *AppSettings, accountSettings *AccountSettings) error {
 	if x.Version != "2.0" {
-		return errors.New("unsupported SAML Version.")
+		return errors.New("unsupported SAML Version")
 	}
 
 	if len(x.ID) == 0 {
-		return errors.New("missing ID attribute on SAML Response.")
+		return errors.New("missing ID attribute on SAML Response")
 	}
 
 	if len(x.Assertion.ID) == 0 {
-		return errors.New("no Assertions.")
+		return errors.New("no Assertions")
 	}
 
 	if len(x.Signature.SignatureValue.Value) == 0 {
-		return errors.New("no signature.")
+		return errors.New("no signature")
 	}
 
 	if x.Destination != appSettings.AssertionConsumerServiceURL {
