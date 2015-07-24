@@ -1,33 +1,23 @@
-package metadata
+package saml
 
 import (
 	"encoding/xml"
 	"fmt"
 
-	"github.com/RobotsAndPencils/gosaml"
+	"github.com/RobotsAndPencils/gosaml/structs"
 )
 
-func NewMetadata(appSettings *saml.AppSettings, accountSettings *saml.AccountSettings) *Metadata {
-
-	return &Metadata{AccountSettings: accountSettings, AppSettings: appSettings}
-}
-
-func (m Metadata) Get() (string, error) {
-	cert, err := m.AccountSettings.CertificateString()
-	if err != nil {
-		return "", err
-	}
-
-	d := EntityDescriptor{
+func (s *ServiceProviderSettings) GetEntityDescriptor() (string, error) {
+	d := structs.EntityDescriptor{
 		XMLName: xml.Name{
 			Local: "md:EntityDescriptor",
 		},
 		DS:       "http://www.w3.org/2000/09/xmldsig#",
 		XMLNS:    "urn:oasis:names:tc:SAML:2.0:metadata",
 		MD:       "urn:oasis:names:tc:SAML:2.0:metadata",
-		EntityId: m.AppSettings.AssertionConsumerServiceURL,
+		EntityId: s.AssertionConsumerServiceURL,
 
-		Extensions: Extensions{
+		Extensions: structs.Extensions{
 			XMLName: xml.Name{
 				Local: "md:Extensions",
 			},
@@ -53,50 +43,50 @@ func (m Metadata) Get() (string, error) {
 			// 	},
 			// },
 		},
-		SPSSODescriptor: SPSSODescriptor{
+		SPSSODescriptor: structs.SPSSODescriptor{
 			ProtocolSupportEnumeration: "urn:oasis:names:tc:SAML:2.0:protocol",
-			SigningKeyDescriptor: KeyDescriptor{
+			SigningKeyDescriptor: structs.KeyDescriptor{
 				XMLName: xml.Name{
 					Local: "md:KeyDescriptor",
 				},
 
 				Use: "signing",
-				KeyInfo: KeyInfo{
+				KeyInfo: structs.KeyInfo{
 					XMLName: xml.Name{
 						Local: "ds:KeyInfo",
 					},
-					X509Data: X509Data{
+					X509Data: structs.X509Data{
 						XMLName: xml.Name{
 							Local: "ds:X509Data",
 						},
-						X509Certificate: X509Certificate{
+						X509Certificate: structs.X509Certificate{
 							XMLName: xml.Name{
 								Local: "ds:X509Certificate",
 							},
-							Value: cert,
+							Cert: s.PublicCert(),
 						},
 					},
 				},
 			},
-			EncryptionKeyDescriptor: KeyDescriptor{
+			EncryptionKeyDescriptor: structs.KeyDescriptor{
 				XMLName: xml.Name{
 					Local: "md:KeyDescriptor",
 				},
 
 				Use: "encryption",
-				KeyInfo: KeyInfo{
+				KeyInfo: structs.KeyInfo{
 					XMLName: xml.Name{
 						Local: "ds:KeyInfo",
 					},
-					X509Data: X509Data{
+					X509Data: structs.X509Data{
 						XMLName: xml.Name{
 							Local: "ds:X509Data",
 						},
-						X509Certificate: X509Certificate{
+						X509Certificate: structs.X509Certificate{
 							XMLName: xml.Name{
 								Local: "ds:X509Certificate",
 							},
-							Value: cert,
+							Cert: s.PublicCert(),
 						},
 					},
 				},
@@ -108,21 +98,21 @@ func (m Metadata) Get() (string, error) {
 			// 	Binding:  "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
 			// 	Location: "---TODO---",
 			// },
-			AssertionConsumerServices: []AssertionConsumerService{
-				AssertionConsumerService{
+			AssertionConsumerServices: []structs.AssertionConsumerService{
+				structs.AssertionConsumerService{
 					XMLName: xml.Name{
 						Local: "md:AssertionConsumerService",
 					},
 					Binding:  "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-					Location: m.AppSettings.AssertionConsumerServiceURL,
+					Location: s.AssertionConsumerServiceURL,
 					Index:    "0",
 				},
-				AssertionConsumerService{
+				structs.AssertionConsumerService{
 					XMLName: xml.Name{
 						Local: "md:AssertionConsumerService",
 					},
 					Binding:  "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact",
-					Location: m.AppSettings.AssertionConsumerServiceURL,
+					Location: s.AssertionConsumerServiceURL,
 					Index:    "1",
 				},
 			},

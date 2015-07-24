@@ -1,15 +1,6 @@
-package metadata
+package structs
 
-import (
-	"encoding/xml"
-
-	"github.com/RobotsAndPencils/gosaml"
-)
-
-type Metadata struct {
-	AppSettings     *saml.AppSettings
-	AccountSettings *saml.AccountSettings
-}
+import "encoding/xml"
 
 // <md:EntityDescriptor xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://ssoproxy.utsystem.edu/simplesaml/module.php/saml/sp/metadata.php/default-sp">
 type EntityDescriptor struct {
@@ -48,13 +39,6 @@ type EntityAttributes struct {
 	EntityAttributes []Attribute `xml:"Attribute"` // should be array??
 }
 
-type Attribute struct {
-	XMLName        xml.Name
-	Name           string `xml:"Name,attr"`
-	NameFormat     string `xml:"NameFormat,attr"`
-	AttributeValue string `xml:"AttributeValue"`
-}
-
 type SPSSODescriptors struct {
 }
 
@@ -62,21 +46,6 @@ type KeyDescriptor struct {
 	XMLName xml.Name
 	Use     string  `xml:"use,attr"`
 	KeyInfo KeyInfo `xml:"KeyInfo"`
-}
-
-type KeyInfo struct {
-	XMLName  xml.Name
-	X509Data X509Data `xml:"X509Data"`
-}
-
-type X509Data struct {
-	XMLName         xml.Name
-	X509Certificate X509Certificate `xml:"X509Certificate"`
-}
-
-type X509Certificate struct {
-	XMLName xml.Name
-	Value   string `xml:",chardata"`
 }
 
 type SingleLogoutService struct {

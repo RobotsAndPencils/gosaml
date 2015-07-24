@@ -9,15 +9,22 @@ import (
 
 func TestGetSignedRequest(t *testing.T) {
 	assert := assert.New(t)
-	appSettings := NewAppSettings("http://www.onelogin.net", "issuer")
-	accountSettings := NewAccountSettings("cert", "http://www.onelogin.net")
+	sp := ServiceProviderSettings{
+		PublicCertPath:              "./default.crt",
+		PrivateKeyPath:              "./default.key",
+		IDPSSOURL:                   "http://www.onelogin.net",
+		IDPSSODescriptorURL:         "http://www.onelogin.net",
+		IDPPublicCertPath:           "./default.crt",
+		AssertionConsumerServiceURL: "http://localhost:8000/auth/saml/name",
+	}
+	err := sp.Init()
+	assert.NoError(err)
 
 	// Construct an AuthnRequest
-	authRequest := NewAuthorizationRequest(appSettings, accountSettings)
-	signedXml, err := authRequest.GetSignedRequest(false, "./default.crt", "./default.key")
+	signedXml, err := sp.GetSignedAuthnRequest()
 	assert.NoError(err)
 	assert.NotEmpty(signedXml)
 
-	err = xmlsec.VerifyRequestSignature(signedXml, "./default.crt")
+	err = xmlsec.VerifyRequestSignature(signedXml, sp.PublicCertPath)
 	assert.NoError(err)
 }

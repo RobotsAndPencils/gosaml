@@ -61,20 +61,20 @@ func sign(xml string, privateKeyPath string, id string) (string, error) {
 }
 
 // VerifyResponseSignature verify signature of a SAML 2.0 Response document
-// `pubCertPath` must be a path on the filesystem, xmlsec1 is run out of process
+// `publicCertPath` must be a path on the filesystem, xmlsec1 is run out of process
 // through `exec`
-func VerifyResponseSignature(xml string, pubCertPath string) error {
-	return verify(xml, pubCertPath, xmlResponseID)
+func VerifyResponseSignature(xml string, publicCertPath string) error {
+	return verify(xml, publicCertPath, xmlResponseID)
 }
 
 // VerifyRequestSignature verify signature of a SAML 2.0 AuthnRequest document
-// `pubCertPath` must be a path on the filesystem, xmlsec1 is run out of process
+// `publicCertPath` must be a path on the filesystem, xmlsec1 is run out of process
 // through `exec`
-func VerifyRequestSignature(xml string, pubCertPath string) error {
-	return verify(xml, pubCertPath, xmlRequestID)
+func VerifyRequestSignature(xml string, publicCertPath string) error {
+	return verify(xml, publicCertPath, xmlRequestID)
 }
 
-func verify(xml string, pubCertPath string, id string) error {
+func verify(xml string, publicCertPath string, id string) error {
 	//Write saml to
 	samlXmlsecInput, err := ioutil.TempFile(os.TempDir(), "tmpgs")
 	if err != nil {
@@ -85,7 +85,7 @@ func verify(xml string, pubCertPath string, id string) error {
 	samlXmlsecInput.Close()
 	defer deleteTempFile(samlXmlsecInput.Name())
 
-	_, err = exec.Command("xmlsec1", "--verify", "--pubkey-cert-pem", pubCertPath, "--id-attr:ID", id, samlXmlsecInput.Name()).Output()
+	_, err = exec.Command("xmlsec1", "--verify", "--pubkey-cert-pem", publicCertPath, "--id-attr:ID", id, samlXmlsecInput.Name()).Output()
 	if err != nil {
 		return errors.New("error verifing signature: " + err.Error())
 	}

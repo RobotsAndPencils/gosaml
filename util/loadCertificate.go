@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// LoadCertificate from file system
 func LoadCertificate(certPath string) (string, error) {
 	b, err := ioutil.ReadFile(certPath)
 	if err != nil {

@@ -3,6 +3,8 @@ package structs
 import (
 	"encoding/xml"
 	"time"
+
+	"github.com/RobotsAndPencils/gosaml/util"
 )
 
 func NewAuthnRequest() *AuthnRequest {
@@ -12,7 +14,7 @@ func NewAuthnRequest() *AuthnRequest {
 		},
 		SAMLP:                       "urn:oasis:names:tc:SAML:2.0:protocol",
 		SAML:                        "urn:oasis:names:tc:SAML:2.0:assertion",
-		ID:                          "", // caller must populate ar.Id
+		ID:                          util.UUID(),
 		ProtocolBinding:             "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
 		Version:                     "2.0",
 		AssertionConsumerServiceURL: "", // caller must populate ar.AppSettings.AssertionConsumerServiceURL,
@@ -49,6 +51,7 @@ func NewAuthnRequest() *AuthnRequest {
 }
 
 func NewAuthnSignedRequest() *AuthnSignedRequest {
+	id := util.UUID()
 	return &AuthnSignedRequest{
 		XMLName: xml.Name{
 			Local: "samlp:AuthnRequest",
@@ -56,7 +59,7 @@ func NewAuthnSignedRequest() *AuthnSignedRequest {
 		SAMLP:                       "urn:oasis:names:tc:SAML:2.0:protocol",
 		SAML:                        "urn:oasis:names:tc:SAML:2.0:assertion",
 		SAMLSIG:                     "http://www.w3.org/2000/09/xmldsig#",
-		ID:                          "", // caller must populate ar.Id,
+		ID:                          id,
 		ProtocolBinding:             "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
 		Version:                     "2.0",
 		AssertionConsumerServiceURL: "", // caller must populate ar.AppSettings.AssertionConsumerServiceURL,
@@ -114,7 +117,7 @@ func NewAuthnSignedRequest() *AuthnSignedRequest {
 					XMLName: xml.Name{
 						Local: "samlsig:Reference",
 					},
-					URI: "", // caller must populate "#" + ar.Id,
+					URI: "#" + id,
 					Transforms: Transforms{
 						XMLName: xml.Name{
 							Local: "samlsig:Transforms",

@@ -10,30 +10,30 @@ import (
 	"github.com/RobotsAndPencils/gosaml/xmlsec"
 )
 
-func Parse(resp string, appSettings *AppSettings, accountSettings *AccountSettings) (map[string]string, error) {
-	x := structs.Response{}
+func (s *ServiceProviderSettings) Parse(b64ResponseXML string) (map[string]string, error) {
+	response := structs.Response{}
 	rtn := make(map[string]string)
-	decode, err := base64.StdEncoding.DecodeString(resp)
+	bytesXML, err := base64.StdEncoding.DecodeString(b64ResponseXML)
 	if err != nil {
 		return rtn, err
 	}
 
-	err = xml.Unmarshal(decode, &x)
+	err = xml.Unmarshal(bytesXML, &response)
 	if err != nil {
 		return rtn, err
 	}
 
-	err = xmlsec.VerifyResponseSignature(string(decode), accountSettings.Certificate)
+	err = xmlsec.VerifyResponseSignature(string(bytesXML), s.PublicCert())
 	if err != nil {
 		return rtn, err
 	}
 
-	err = IsValid(&x, appSettings, accountSettings)
+	err = s.IsValid(&response)
 	if err != nil {
 		return rtn, err
 	}
 
-	for _, attr := range x.Assertion.AttributeStatement.Attributes {
+	for _, attr := range response.Assertion.AttributeStatement.Attributes {
 		rtn[attr.Name] = attr.AttributeValue.Value
 
 		if attr.FriendlyName != "" {
@@ -45,37 +45,37 @@ func Parse(resp string, appSettings *AppSettings, accountSettings *AccountSettin
 
 }
 
-func IsValid(x *structs.Response, appSettings *AppSettings, accountSettings *AccountSettings) error {
-	if x.Version != "2.0" {
+func (s *ServiceProviderSettings) IsValid(response *structs.Response) error {
+	if response.Version != "2.0" {
 		return errors.New("unsupported SAML Version")
 	}
 
-	if len(x.ID) == 0 {
+	if len(response.ID) == 0 {
 		return errors.New("missing ID attribute on SAML Response")
 	}
 
-	if len(x.Assertion.ID) == 0 {
+	if len(response.Assertion.ID) == 0 {
 		return errors.New("no Assertions")
 	}
 
-	if len(x.Signature.SignatureValue.Value) == 0 {
+	if len(response.Signature.SignatureValue.Value) == 0 {
 		return errors.New("no signature")
 	}
 
-	if x.Destination != appSettings.AssertionConsumerServiceURL {
-		return errors.New("destination mismath expected: " + appSettings.AssertionConsumerServiceURL + " not " + x.Destination)
+	if response.Destination != s.AssertionConsumerServiceURL {
+		return errors.New("destination mismath expected: " + s.AssertionConsumerServiceURL + " not " + response.Destination)
 	}
 
-	if x.Assertion.Subject.SubjectConfirmation.Method != "urn:oasis:names:tc:SAML:2.0:cm:bearer" {
+	if response.Assertion.Subject.SubjectConfirmation.Method != "urn:oasis:names:tc:SAML:2.0:cm:bearer" {
 		return errors.New("assertion method exception")
 	}
 
-	if x.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != appSettings.AssertionConsumerServiceURL {
-		return errors.New("subject recipient mismatch, expected: " + appSettings.AssertionConsumerServiceURL + " not " + x.Destination)
+	if response.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != s.AssertionConsumerServiceURL {
+		return errors.New("subject recipient mismatch, expected: " + s.AssertionConsumerServiceURL + " not " + response.Destination)
 	}
 
 	//CHECK TIMES
-	expires := x.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter
+	expires := response.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter
 	notOnOrAfter, e := time.Parse(time.RFC3339, expires)
 	if e != nil {
 		return e

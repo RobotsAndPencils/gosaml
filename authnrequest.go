@@ -22,25 +22,12 @@ import (
 
 	"github.com/RobotsAndPencils/gosaml/structs"
 	"github.com/RobotsAndPencils/gosaml/xmlsec"
-	"github.com/nu7hatch/gouuid"
 )
 
-func NewAuthorizationRequest(appSettings AppSettings, accountSettings AccountSettings) *AuthorizationRequest {
-	myIdUUID, err := uuid.NewV4()
-	if err != nil {
-		fmt.Println("Error is UUID Generation:", err)
-	}
-
-	return &AuthorizationRequest{AccountSettings: accountSettings, AppSettings: appSettings, Id: "_" + myIdUUID.String()}
-}
-
-// GetRequest returns a string formatted XML document that represents the SAML document
-// TODO: parameterize more parts of the request
-func (ar AuthorizationRequest) GetRequest(base64Encode bool) (string, error) {
+// GetAuthnRequest returns an XML document that represents a AuthnRequest SAML document
+func (s *ServiceProviderSettings) GetAuthnRequest() (string, error) {
 	d := structs.NewAuthnRequest()
-	d.ID = ar.Id
-	d.AssertionConsumerServiceURL = ar.AppSettings.AssertionConsumerServiceURL
-	d.Issuer.Url = ar.AppSettings.AssertionConsumerServiceURL
+	d.Issuer.Url = s.IDPSSODescriptorURL
 	b, err := xml.MarshalIndent(d, "", "    ")
 	if err != nil {
 		return "", err
@@ -48,28 +35,14 @@ func (ar AuthorizationRequest) GetRequest(base64Encode bool) (string, error) {
 
 	xmlAuthnRequest := fmt.Sprintf("<?xml version='1.0' encoding='UTF-8'?>\n%s", b)
 
-	if base64Encode {
-		data := []byte(xmlAuthnRequest)
-		return base64.StdEncoding.EncodeToString(data), nil
-	} else {
-		return string(xmlAuthnRequest), nil
-	}
+	return string(xmlAuthnRequest), nil
 }
 
-// GetSignedRequest returns a string formatted XML document that represents the SAML document
-// TODO: parameterize more parts of the request
-func (ar AuthorizationRequest) GetSignedRequest(base64Encode bool, publicCert string, privateKey string) (string, error) {
-	cert, err := LoadCertificate(publicCert)
-	if err != nil {
-		return "", err
-	}
-
+// GetSignedAuthnRequest returns a singed XML document that represents a AuthnRequest SAML document
+func (s *ServiceProviderSettings) GetSignedAuthnRequest() (string, error) {
 	d := structs.NewAuthnSignedRequest()
-	d.ID = ar.Id
-	d.AssertionConsumerServiceURL = ar.AppSettings.AssertionConsumerServiceURL
-	d.Issuer.Url = ar.AppSettings.AssertionConsumerServiceURL
-	d.Signature.SignedInfo.SamlsigReference.URI = "#" + ar.Id
-	d.Signature.KeyInfo.X509Data.X509Certificate.Cert = cert
+	d.Issuer.Url = s.IDPSSODescriptorURL
+	d.Signature.KeyInfo.X509Data.X509Certificate.Cert = s.PublicCert()
 
 	b, err := xml.MarshalIndent(d, "", "    ")
 	if err != nil {
@@ -77,31 +50,25 @@ func (ar AuthorizationRequest) GetSignedRequest(base64Encode bool, publicCert st
 	}
 
 	samlAuthnRequest := string(b)
-	samlSignedRequestXml, err := xmlsec.SignRequest(samlAuthnRequest, privateKey)
-
-	if base64Encode {
-		data := []byte(samlSignedRequestXml)
-		return base64.StdEncoding.EncodeToString(data), nil
-	} else {
-		return string(samlSignedRequestXml), nil
+	samlSignedRequestXml, err := xmlsec.SignRequest(samlAuthnRequest, s.PrivateKeyPath)
+	if err != nil {
+		return "", err
 	}
+
+	return string(samlSignedRequestXml), nil
 }
 
-// String reqString = accSettings.getIdp_sso_target_url()+"?SAMLRequest=" +
-// AuthRequest.getRidOfCRLF(URLEncoder.encode(authReq.getRequest(AuthRequest.base64),"UTF-8"));
-func (ar AuthorizationRequest) GetRequestUrl() (string, error) {
-	u, err := url.Parse(ar.AccountSettings.IDP_SSO_Target_URL)
+func (s *ServiceProviderSettings) GetAuthnRequestURL(authnRequestXML string) (string, error) {
+	u, err := url.Parse(s.IDPSSODescriptorURL)
 	if err != nil {
 		return "", err
 	}
-	base64EncodedUTF8SamlRequest, err := ar.GetRequest(true)
-	if err != nil {
-		return "", err
-	}
+
+	data := []byte(authnRequestXML)
+	b64XML := base64.StdEncoding.EncodeToString(data)
 
 	q := u.Query()
-	q.Add("SAMLRequest", base64EncodedUTF8SamlRequest)
-
+	q.Add("SAMLRequest", b64XML)
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }

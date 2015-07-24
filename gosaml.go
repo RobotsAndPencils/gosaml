@@ -1,28 +1,68 @@
 package saml
 
-type AccountSettings struct {
-	Certificate        string
-	IDP_SSO_Target_URL string
-}
+import "github.com/RobotsAndPencils/gosaml/util"
 
-type AppSettings struct {
+// ServiceProviderSettings provides settings to configure server acting as a SAML Service Provider.
+// Expect only one IDP per SP in this configuration. If you need to configure multipe IDPs for an SP
+// then configure multiple instances of this module
+type ServiceProviderSettings struct {
+	PublicCertPath              string
+	PrivateKeyPath              string
+	IDPSSOURL                   string
+	IDPSSODescriptorURL         string
+	IDPPublicCertPath           string
 	AssertionConsumerServiceURL string
-	Issuer                      string
+
+	hasInit       bool
+	publicCert    string
+	privateKey    string
+	iDPPublicCert string
 }
 
-func NewAccountSettings(cert string, targetUrl string) AccountSettings {
-	return AccountSettings{cert, targetUrl}
+type IdentityProviderSettings struct {
 }
 
-func NewAppSettings(assertionServiceUrl string, issuer string) AppSettings {
-	return AppSettings{assertionServiceUrl, issuer}
-}
-
-func (as *AccountSettings) CertificateString() (string, error) {
-	cert, err := LoadCertificate(as.Certificate)
-	if err != nil {
-		return "", err
-	} else {
-		return cert, nil
+func (s *ServiceProviderSettings) Init() (err error) {
+	if s.hasInit {
+		return nil
 	}
+	s.hasInit = true
+
+	s.publicCert, err = util.LoadCertificate(s.PublicCertPath)
+	if err != nil {
+		panic(err)
+	}
+
+	s.privateKey, err = util.LoadCertificate(s.PrivateKeyPath)
+	if err != nil {
+		panic(err)
+	}
+
+	s.iDPPublicCert, err = util.LoadCertificate(s.IDPPublicCertPath)
+	if err != nil {
+		panic(err)
+	}
+
+	return nil
+}
+
+func (s *ServiceProviderSettings) PublicCert() string {
+	if !s.hasInit {
+		panic("Must call ServiceProviderSettings.Init() first")
+	}
+	return s.publicCert
+}
+
+func (s *ServiceProviderSettings) PrivateKey() string {
+	if !s.hasInit {
+		panic("Must call ServiceProviderSettings.Init() first")
+	}
+	return s.privateKey
+}
+
+func (s *ServiceProviderSettings) IDPPublicCert() string {
+	if !s.hasInit {
+		panic("Must call ServiceProviderSettings.Init() first")
+	}
+	return s.iDPPublicCert
 }
