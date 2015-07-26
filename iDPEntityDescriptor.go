@@ -3,12 +3,10 @@ package saml
 import (
 	"encoding/xml"
 	"fmt"
-
-	"github.com/RobotsAndPencils/gosaml/structs"
 )
 
 func (s *ServiceProviderSettings) GetEntityDescriptor() (string, error) {
-	d := structs.EntityDescriptor{
+	d := EntityDescriptor{
 		XMLName: xml.Name{
 			Local: "md:EntityDescriptor",
 		},
@@ -17,7 +15,7 @@ func (s *ServiceProviderSettings) GetEntityDescriptor() (string, error) {
 		MD:       "urn:oasis:names:tc:SAML:2.0:metadata",
 		EntityId: s.AssertionConsumerServiceURL,
 
-		Extensions: structs.Extensions{
+		Extensions: Extensions{
 			XMLName: xml.Name{
 				Local: "md:Extensions",
 			},
@@ -43,23 +41,23 @@ func (s *ServiceProviderSettings) GetEntityDescriptor() (string, error) {
 			// 	},
 			// },
 		},
-		SPSSODescriptor: structs.SPSSODescriptor{
+		SPSSODescriptor: SPSSODescriptor{
 			ProtocolSupportEnumeration: "urn:oasis:names:tc:SAML:2.0:protocol",
-			SigningKeyDescriptor: structs.KeyDescriptor{
+			SigningKeyDescriptor: KeyDescriptor{
 				XMLName: xml.Name{
 					Local: "md:KeyDescriptor",
 				},
 
 				Use: "signing",
-				KeyInfo: structs.KeyInfo{
+				KeyInfo: KeyInfo{
 					XMLName: xml.Name{
 						Local: "ds:KeyInfo",
 					},
-					X509Data: structs.X509Data{
+					X509Data: X509Data{
 						XMLName: xml.Name{
 							Local: "ds:X509Data",
 						},
-						X509Certificate: structs.X509Certificate{
+						X509Certificate: X509Certificate{
 							XMLName: xml.Name{
 								Local: "ds:X509Certificate",
 							},
@@ -68,21 +66,21 @@ func (s *ServiceProviderSettings) GetEntityDescriptor() (string, error) {
 					},
 				},
 			},
-			EncryptionKeyDescriptor: structs.KeyDescriptor{
+			EncryptionKeyDescriptor: KeyDescriptor{
 				XMLName: xml.Name{
 					Local: "md:KeyDescriptor",
 				},
 
 				Use: "encryption",
-				KeyInfo: structs.KeyInfo{
+				KeyInfo: KeyInfo{
 					XMLName: xml.Name{
 						Local: "ds:KeyInfo",
 					},
-					X509Data: structs.X509Data{
+					X509Data: X509Data{
 						XMLName: xml.Name{
 							Local: "ds:X509Data",
 						},
-						X509Certificate: structs.X509Certificate{
+						X509Certificate: X509Certificate{
 							XMLName: xml.Name{
 								Local: "ds:X509Certificate",
 							},
@@ -98,8 +96,8 @@ func (s *ServiceProviderSettings) GetEntityDescriptor() (string, error) {
 			// 	Binding:  "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
 			// 	Location: "---TODO---",
 			// },
-			AssertionConsumerServices: []structs.AssertionConsumerService{
-				structs.AssertionConsumerService{
+			AssertionConsumerServices: []AssertionConsumerService{
+				AssertionConsumerService{
 					XMLName: xml.Name{
 						Local: "md:AssertionConsumerService",
 					},
@@ -107,7 +105,7 @@ func (s *ServiceProviderSettings) GetEntityDescriptor() (string, error) {
 					Location: s.AssertionConsumerServiceURL,
 					Index:    "0",
 				},
-				structs.AssertionConsumerService{
+				AssertionConsumerService{
 					XMLName: xml.Name{
 						Local: "md:AssertionConsumerService",
 					},

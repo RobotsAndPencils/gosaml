@@ -3,7 +3,6 @@ package saml
 import (
 	"testing"
 
-	"github.com/RobotsAndPencils/gosaml/xmlsec"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,6 +24,6 @@ func TestGetSignedRequest(t *testing.T) {
 	assert.NoError(err)
 	assert.NotEmpty(signedXml)
 
-	err = xmlsec.VerifyRequestSignature(signedXml, sp.PublicCertPath)
+	err = VerifyRequestSignature(signedXml, sp.PublicCertPath)
 	assert.NoError(err)
 }

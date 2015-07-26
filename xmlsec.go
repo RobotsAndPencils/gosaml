@@ -1,4 +1,4 @@
-package xmlsec
+package saml
 
 import (
 	"errors"
