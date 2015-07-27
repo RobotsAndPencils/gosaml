@@ -6,22 +6,6 @@ type AuthnRequest struct {
 	XMLName                        xml.Name
 	SAMLP                          string                `xml:"xmlns:samlp,attr"`
 	SAML                           string                `xml:"xmlns:saml,attr"`
-	ID                             string                `xml:"ID,attr"`
-	Version                        string                `xml:"Version,attr"`
-	ProtocolBinding                string                `xml:"ProtocolBinding,attr"`
-	AssertionConsumerServiceURL    string                `xml:"AssertionConsumerServiceURL,attr"`
-	IssueInstant                   string                `xml:"IssueInstant,attr"`
-	AssertionConsumerServiceIndex  int                   `xml:"AssertionConsumerServiceIndex,attr"`
-	AttributeConsumingServiceIndex int                   `xml:"AttributeConsumingServiceIndex,attr"`
-	Issuer                         Issuer                `xml:"Issuer"`
-	NameIDPolicy                   NameIDPolicy          `xml:"NameIDPolicy"`
-	RequestedAuthnContext          RequestedAuthnContext `xml:"RequestedAuthnContext"`
-}
-
-type AuthnSignedRequest struct {
-	XMLName                        xml.Name
-	SAMLP                          string                `xml:"xmlns:samlp,attr"`
-	SAML                           string                `xml:"xmlns:saml,attr"`
 	SAMLSIG                        string                `xml:"xmlns:samlsig,attr"`
 	ID                             string                `xml:"ID,attr"`
 	Version                        string                `xml:"Version,attr"`
@@ -33,7 +17,8 @@ type AuthnSignedRequest struct {
 	Issuer                         Issuer                `xml:"Issuer"`
 	NameIDPolicy                   NameIDPolicy          `xml:"NameIDPolicy"`
 	RequestedAuthnContext          RequestedAuthnContext `xml:"RequestedAuthnContext"`
-	Signature                      Signature             `xml:"Signature"`
+	Signature                      Signature             `xml:"Signature,omitempty"`
+	originalString                 string                `xml:,omitempty`
 }
 
 type Issuer struct {
@@ -205,6 +190,8 @@ type Response struct {
 	Signature Signature `xml:"Signature"`
 	Issuer    Issuer    `xml:"Issuer"`
 	Status    Status    `xml:"Status"`
+
+	originalString string `xml:,omitempty`
 }
 
 type Assertion struct {
@@ -213,7 +200,7 @@ type Assertion struct {
 	Version            string `xml:"Version,attr"`
 	XS                 string `xml:"xmlns:xs,attr"`
 	XSI                string `xml:"xmlns:xsi,attr"`
-	SAML               string `xml:"saml2,attr"`
+	SAML               string `xml:"saml,attr"`
 	IssueInstant       string `xml:"IssueInstant,attr"`
 	Issuer             Issuer `xml:"Issuer"`
 	Subject            Subject
@@ -245,7 +232,6 @@ type Status struct {
 }
 
 type SubjectConfirmationData struct {
-	Address      string `xml:",attr"`
 	InResponseTo string `xml:",attr"`
 	NotOnOrAfter string `xml:",attr"`
 	Recipient    string `xml:",attr"`

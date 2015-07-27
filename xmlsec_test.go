@@ -14,7 +14,7 @@ func TestRequest(t *testing.T) {
 	assert.NoError(err)
 
 	// Construct an AuthnRequest
-	authRequest := NewAuthnSignedRequest()
+	authRequest := NewAuthnRequest()
 	authRequest.Signature.KeyInfo.X509Data.X509Certificate.Cert = cert
 
 	b, err := xml.MarshalIndent(authRequest, "", "    ")

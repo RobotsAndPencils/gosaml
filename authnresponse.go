@@ -4,78 +4,65 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/RobotsAndPencils/gosaml/util"
 )
 
-func (s *ServiceProviderSettings) ParseResponse(b64ResponseXML string) (map[string]string, error) {
+func ParseEncodedResponse(b64ResponseXML string) (*Response, error) {
 	response := Response{}
-	rtn := make(map[string]string)
 	bytesXML, err := base64.StdEncoding.DecodeString(b64ResponseXML)
 	if err != nil {
-		return rtn, err
+		return nil, err
 	}
-	//fmt.Println(string(bytesXML))
 	err = xml.Unmarshal(bytesXML, &response)
 	if err != nil {
-		return rtn, err
+		return nil, err
 	}
 
-	err = VerifyResponseSignature(string(bytesXML), s.IDPPublicCertPath)
-	if err != nil {
-		return rtn, err
-	}
-
-	err = s.IsResponseValid(&response)
-	if err != nil {
-		return rtn, err
-	}
-
-	for _, attr := range response.Assertion.AttributeStatement.Attributes {
-		fmt.Println("ATTRIBUTE", attr.Name, attr.AttributeValue.Value)
-		rtn[attr.Name] = attr.AttributeValue.Value
-
-		if attr.FriendlyName != "" {
-			rtn[attr.FriendlyName] = attr.AttributeValue.Value
-		}
-	}
-
-	return rtn, err
+	// There is a bug with XML namespaces in Go that's causing XML attributes with colons to not be roundtrip
+	// marshal and unmarshaled so we'll keep the original string around for validation.
+	response.originalString = string(bytesXML)
+	// fmt.Println(response.originalString)
+	return &response, nil
 }
 
-func (s *ServiceProviderSettings) IsResponseValid(response *Response) error {
-	if response.Version != "2.0" {
+func (r *Response) Validate(s *ServiceProviderSettings) error {
+	if r.Version != "2.0" {
 		return errors.New("unsupported SAML Version")
 	}
 
-	if len(response.ID) == 0 {
+	if len(r.ID) == 0 {
 		return errors.New("missing ID attribute on SAML Response")
 	}
 
-	if len(response.Assertion.ID) == 0 {
+	if len(r.Assertion.ID) == 0 {
 		return errors.New("no Assertions")
 	}
 
-	if len(response.Signature.SignatureValue.Value) == 0 {
+	if len(r.Signature.SignatureValue.Value) == 0 {
 		return errors.New("no signature")
 	}
 
-	if response.Destination != s.AssertionConsumerServiceURL {
-		return errors.New("destination mismath expected: " + s.AssertionConsumerServiceURL + " not " + response.Destination)
+	if r.Destination != s.AssertionConsumerServiceURL {
+		return errors.New("destination mismath expected: " + s.AssertionConsumerServiceURL + " not " + r.Destination)
 	}
 
-	if response.Assertion.Subject.SubjectConfirmation.Method != "urn:oasis:names:tc:SAML:2.0:cm:bearer" {
+	if r.Assertion.Subject.SubjectConfirmation.Method != "urn:oasis:names:tc:SAML:2.0:cm:bearer" {
 		return errors.New("assertion method exception")
 	}
 
-	if response.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != s.AssertionConsumerServiceURL {
-		return errors.New("subject recipient mismatch, expected: " + s.AssertionConsumerServiceURL + " not " + response.Destination)
+	if r.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.Recipient != s.AssertionConsumerServiceURL {
+		return errors.New("subject recipient mismatch, expected: " + s.AssertionConsumerServiceURL + " not " + r.Destination)
+	}
+
+	err := VerifyResponseSignature(r.originalString, s.IDPPublicCertPath)
+	if err != nil {
+		return err
 	}
 
 	//CHECK TIMES
-	expires := response.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter
+	expires := r.Assertion.Subject.SubjectConfirmation.SubjectConfirmationData.NotOnOrAfter
 	notOnOrAfter, e := time.Parse(time.RFC3339, expires)
 	if e != nil {
 		return e
@@ -194,7 +181,9 @@ func NewSignedResponse() *Response {
 			},
 			XS:           "http://www.w3.org/2001/XMLSchema",
 			XSI:          "http://www.w3.org/2001/XMLSchema-instance",
+			SAML:         "urn:oasis:names:tc:SAML:2.0:assertion",
 			Version:      "2.0",
+			ID:           util.ID(),
 			IssueInstant: time.Now().UTC().Format(time.RFC3339Nano),
 			Issuer: Issuer{
 				XMLName: xml.Name{
@@ -210,7 +199,7 @@ func NewSignedResponse() *Response {
 					XMLName: xml.Name{
 						Local: "saml:NameID",
 					},
-					Format: "urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified",
+					Format: "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
 					Value:  "",
 				},
 				SubjectConfirmation: SubjectConfirmation{
@@ -219,7 +208,6 @@ func NewSignedResponse() *Response {
 					},
 					Method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
 					SubjectConfirmationData: SubjectConfirmationData{
-						Address:      "",
 						InResponseTo: "",
 						NotOnOrAfter: time.Now().Add(time.Minute * 5).UTC().Format(time.RFC3339Nano),
 						Recipient:    "",
@@ -259,4 +247,32 @@ func (r *Response) AddAttribute(name, value string) {
 			Value: value,
 		},
 	})
+}
+
+func (r *Response) String() (string, error) {
+	b, err := xml.MarshalIndent(r, "", "    ")
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
+}
+
+func (r *Response) SignedString(privateKeyPath string) (string, error) {
+	s, err := r.String()
+	if err != nil {
+		return "", err
+	}
+
+	return SignResponse(s, privateKeyPath)
+}
+
+// GetAttribute by Name or by FriendlyName. Return blank string if not found
+func (r *Response) GetAttribute(name string) string {
+	for _, attr := range r.Assertion.AttributeStatement.Attributes {
+		if attr.Name == name || attr.FriendlyName == name {
+			return attr.AttributeValue.Value
+		}
+	}
+	return ""
 }

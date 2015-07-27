@@ -17,31 +17,52 @@ package saml
 import (
 	"encoding/base64"
 	"encoding/xml"
-	"fmt"
+	"errors"
 	"net/url"
 	"time"
 
 	"github.com/RobotsAndPencils/gosaml/util"
 )
 
-// GetAuthnRequest returns an XML document that represents a AuthnRequest SAML document
-func (s *ServiceProviderSettings) GetAuthnRequest() (string, error) {
-	d := NewAuthnRequest()
-	d.AssertionConsumerServiceURL = s.AssertionConsumerServiceURL
-	d.Issuer.Url = s.IDPSSODescriptorURL
-	b, err := xml.MarshalIndent(d, "", "    ")
+func ParseEncodedRequest(b64RequestXML string) (*AuthnRequest, error) {
+	authnRequest := AuthnRequest{}
+	bytesXML, err := base64.StdEncoding.DecodeString(b64RequestXML)
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+	err = xml.Unmarshal(bytesXML, &authnRequest)
+	if err != nil {
+		return nil, err
 	}
 
-	xmlAuthnRequest := fmt.Sprintf("<?xml version='1.0' encoding='UTF-8'?>\n%s", b)
+	// There is a bug with XML namespaces in Go that's causing XML attributes with colons to not be roundtrip
+	// marshal and unmarshaled so we'll keep the original string around for validation.
+	authnRequest.originalString = string(bytesXML)
+	return &authnRequest, nil
+}
 
-	return string(xmlAuthnRequest), nil
+func (r *AuthnRequest) Validate(publicCertPath string) error {
+	if r.Version != "2.0" {
+		return errors.New("unsupported SAML Version")
+	}
+
+	if len(r.ID) == 0 {
+		return errors.New("missing ID attribute on SAML Response")
+	}
+
+	// TODO more validation
+
+	err := VerifyRequestSignature(r.originalString, publicCertPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // GetSignedAuthnRequest returns a singed XML document that represents a AuthnRequest SAML document
 func (s *ServiceProviderSettings) GetSignedAuthnRequest() (string, error) {
-	d := NewAuthnSignedRequest()
+	d := NewAuthnRequest()
 	d.AssertionConsumerServiceURL = s.AssertionConsumerServiceURL
 	d.Issuer.Url = s.IDPSSODescriptorURL
 	d.Signature.KeyInfo.X509Data.X509Certificate.Cert = s.PublicCert()
@@ -61,14 +82,11 @@ func (s *ServiceProviderSettings) GetSignedAuthnRequest() (string, error) {
 }
 
 // GetAuthnRequestURL generate a URL for the AuthnRequest to the IdP with the SAMLRequst parameter encoded
-func (s *ServiceProviderSettings) GetAuthnRequestURL(authnRequestXML string) (string, error) {
-	u, err := url.Parse(s.IDPSSOURL)
+func GetAuthnRequestURL(baseURL string, b64XML string) (string, error) {
+	u, err := url.Parse(baseURL)
 	if err != nil {
 		return "", err
 	}
-
-	data := []byte(authnRequestXML)
-	b64XML := base64.StdEncoding.EncodeToString(data)
 
 	q := u.Query()
 	q.Add("SAMLRequest", b64XML)
@@ -77,13 +95,15 @@ func (s *ServiceProviderSettings) GetAuthnRequestURL(authnRequestXML string) (st
 }
 
 func NewAuthnRequest() *AuthnRequest {
+	id := util.ID()
 	return &AuthnRequest{
 		XMLName: xml.Name{
 			Local: "samlp:AuthnRequest",
 		},
 		SAMLP:                       "urn:oasis:names:tc:SAML:2.0:protocol",
 		SAML:                        "urn:oasis:names:tc:SAML:2.0:assertion",
-		ID:                          util.ID(),
+		SAMLSIG:                     "http://www.w3.org/2000/09/xmldsig#",
+		ID:                          id,
 		ProtocolBinding:             "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
 		Version:                     "2.0",
 		AssertionConsumerServiceURL: "", // caller must populate ar.AppSettings.AssertionConsumerServiceURL,
@@ -116,51 +136,6 @@ func NewAuthnRequest() *AuthnRequest {
 				Transport: "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
 			},
 		},
-	}
-}
-
-func NewAuthnSignedRequest() *AuthnSignedRequest {
-	id := util.ID()
-	return &AuthnSignedRequest{
-		XMLName: xml.Name{
-			Local: "samlp:AuthnRequest",
-		},
-		SAMLP:                       "urn:oasis:names:tc:SAML:2.0:protocol",
-		SAML:                        "urn:oasis:names:tc:SAML:2.0:assertion",
-		SAMLSIG:                     "http://www.w3.org/2000/09/xmldsig#",
-		ID:                          id,
-		ProtocolBinding:             "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-		Version:                     "2.0",
-		AssertionConsumerServiceURL: "", // caller must populate ar.AppSettings.AssertionConsumerServiceURL,
-		Issuer: Issuer{
-			XMLName: xml.Name{
-				Local: "saml:Issuer",
-			},
-			Url: "", // caller must populate ar.AppSettings.AssertionConsumerServiceURL,
-		},
-		IssueInstant: time.Now().UTC().Format(time.RFC3339Nano),
-		NameIDPolicy: NameIDPolicy{
-			XMLName: xml.Name{
-				Local: "samlp:NameIDPolicy",
-			},
-			AllowCreate: true,
-			Format:      "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
-		},
-		RequestedAuthnContext: RequestedAuthnContext{
-			XMLName: xml.Name{
-				Local: "samlp:RequestedAuthnContext",
-			},
-			SAMLP:      "urn:oasis:names:tc:SAML:2.0:protocol",
-			Comparison: "exact",
-			AuthnContextClassRef: AuthnContextClassRef{
-				XMLName: xml.Name{
-					Local: "saml:AuthnContextClassRef",
-				},
-				SAML:      "urn:oasis:names:tc:SAML:2.0:assertion",
-				Transport: "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
-			},
-		},
-
 		Signature: Signature{
 			XMLName: xml.Name{
 				Local: "samlsig:Signature",
@@ -234,4 +209,32 @@ func NewAuthnSignedRequest() *AuthnSignedRequest {
 			},
 		},
 	}
+}
+
+func (r *AuthnRequest) String() (string, error) {
+	b, err := xml.MarshalIndent(r, "", "    ")
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
+}
+
+func (r *AuthnRequest) SignedString(privateKeyPath string) (string, error) {
+	s, err := r.String()
+	if err != nil {
+		return "", err
+	}
+
+	return SignRequest(s, privateKeyPath)
+}
+
+// GetAuthnRequestURL generate a URL for the AuthnRequest to the IdP with the SAMLRequst parameter encoded
+func (r *AuthnRequest) EncodedSignedString(privateKeyPath string) (string, error) {
+	signed, err := r.SignedString(privateKeyPath)
+	if err != nil {
+		return "", err
+	}
+	b64XML := base64.StdEncoding.EncodeToString([]byte(signed))
+	return b64XML, nil
 }

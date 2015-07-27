@@ -45,11 +45,14 @@ func sign(xml string, privateKeyPath string, id string) (string, error) {
 	defer deleteTempFile(samlXmlsecOutput.Name())
 	samlXmlsecOutput.Close()
 
-	_, err = exec.Command("xmlsec1", "--sign", "--privkey-pem", privateKeyPath,
+	// fmt.Println("xmlsec1", "--sign", "--privkey-pem", privateKeyPath,
+	// 	"--id-attr:ID", id,
+	// 	"--output", samlXmlsecOutput.Name(), samlXmlsecInput.Name())
+	output, err := exec.Command("xmlsec1", "--sign", "--privkey-pem", privateKeyPath,
 		"--id-attr:ID", id,
-		"--output", samlXmlsecOutput.Name(), samlXmlsecInput.Name()).Output()
+		"--output", samlXmlsecOutput.Name(), samlXmlsecInput.Name()).CombinedOutput()
 	if err != nil {
-		return "", err
+		return "", errors.New(err.Error() + " : " + string(output))
 	}
 
 	samlSignedRequest, err := ioutil.ReadFile(samlXmlsecOutput.Name())
@@ -85,7 +88,8 @@ func verify(xml string, publicCertPath string, id string) error {
 	samlXmlsecInput.Close()
 	defer deleteTempFile(samlXmlsecInput.Name())
 
-	_, err = exec.Command("xmlsec1", "--verify", "--pubkey-cert-pem", publicCertPath, "--id-attr:ID", id, samlXmlsecInput.Name()).Output()
+	//fmt.Println("xmlsec1", "--verify", "--pubkey-cert-pem", publicCertPath, "--id-attr:ID", id, samlXmlsecInput.Name())
+	_, err = exec.Command("xmlsec1", "--verify", "--pubkey-cert-pem", publicCertPath, "--id-attr:ID", id, samlXmlsecInput.Name()).CombinedOutput()
 	if err != nil {
 		return errors.New("error verifing signature: " + err.Error())
 	}
